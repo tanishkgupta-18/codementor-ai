@@ -32,8 +32,10 @@ if "problem" in st.session_state:
         payload = {
             "title": data["title"],
             "description": clean_text,
-            "code": code
+            "code": code,
+            "topics": data["topics"]
         }
+
 
         res = requests.post(
             "http://127.0.0.1:8000/review-code",

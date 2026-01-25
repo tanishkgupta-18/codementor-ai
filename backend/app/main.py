@@ -1,26 +1,28 @@
-from fastapi import FastAPI
-from fastapi import Query
+from fastapi import FastAPI, Query, Body
 import requests
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from fastapi import Body
+from backend.app.db import reviews
+
+from backend.app.agents import build_graph
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+graph = build_graph()
 
 app = FastAPI()
 
+
 @app.get("/")
 def read_root():
-    return {"message": "CodeMentor AI backend is running 🚀"}
+    return {"message": "CodeMentor AI backend is running"}
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-from fastapi import Query
-import requests
 
 @app.get("/fetch-problem")
 def fetch_problem(slug: str = Query(...)):
@@ -51,41 +53,21 @@ def fetch_problem(slug: str = Query(...)):
         "topics": topics
     }
 
-from backend.app.rag import load_vectorstore
-
-vectorstore = load_vectorstore()
 
 @app.post("/review-code")
 def review_code(problem: dict = Body(...)):
-    # Retrieve relevant DSA concept
-    docs = vectorstore.similarity_search(problem["description"], k=2)
-    context = "\n".join([doc.page_content for doc in docs])
+    result = graph.invoke({
+        "title": problem["title"],
+        "description": problem["description"],
+        "code": problem["code"],
+        "context": "",
+        "review": ""
+    })
 
-    prompt = f"""
-You are a DSA mentor.
+    reviews.insert_one({
+        "title": problem["title"],
+        "topics": problem.get("topics", []),
+        "review": result["review"]
+    })
 
-Relevant DSA Concepts:
-{context}
-
-Problem:
-{problem['title']}
-
-Description:
-{problem['description']}
-
-User Code:
-{problem['code']}
-
-Give feedback on:
-1. Correctness
-2. Time & Space Complexity
-3. Which DSA pattern applies here and why
-4. How to improve
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    return {"review": response.choices[0].message.content}
+    return {"review": result["review"]}
