@@ -1,0 +1,16 @@
+HashMap Pattern:
+Used when we need fast lookup of elements.
+Common in problems like Two Sum, Subarray Sum, Longest substring without repeating characters.
+Time complexity becomes O(n).
+
+Two Pointer Pattern:
+Used in sorted arrays or when shrinking/expanding window.
+Example: Container with most water, 3Sum, remove duplicates.
+
+Sliding Window Pattern:
+Used for subarray/substring problems.
+Maintain a window and adjust based on condition.
+
+Prefix Sum Pattern:
+Used when we need range sum quickly.
+Store cumulative sums to answer queries in O(1).

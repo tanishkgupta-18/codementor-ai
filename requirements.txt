@@ -4,4 +4,13 @@ streamlit
 requests
 python-dotenv
 beautifulsoup4
+
 openai
+tiktoken
+
+langchain
+langchain-openai
+langchain-community
+langchain-text-splitters
+
+faiss-cpu

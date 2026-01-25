@@ -51,10 +51,21 @@ def fetch_problem(slug: str = Query(...)):
         "topics": topics
     }
 
+from backend.app.rag import load_vectorstore
+
+vectorstore = load_vectorstore()
+
 @app.post("/review-code")
 def review_code(problem: dict = Body(...)):
+    # Retrieve relevant DSA concept
+    docs = vectorstore.similarity_search(problem["description"], k=2)
+    context = "\n".join([doc.page_content for doc in docs])
+
     prompt = f"""
 You are a DSA mentor.
+
+Relevant DSA Concepts:
+{context}
 
 Problem:
 {problem['title']}
@@ -68,7 +79,8 @@ User Code:
 Give feedback on:
 1. Correctness
 2. Time & Space Complexity
-3. How to improve
+3. Which DSA pattern applies here and why
+4. How to improve
 """
 
     response = client.chat.completions.create(
