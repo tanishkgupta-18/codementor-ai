@@ -14,3 +14,10 @@ langchain-community
 langchain-text-splitters
 
 faiss-cpu
+
+pymongo
+python-jose
+argon2-cffi
+
+pandas
+plotly

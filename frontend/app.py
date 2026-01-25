@@ -1,8 +1,8 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import matplotlib.pyplot as plt
 import pandas as pd
+import plotly.express as px
 
 st.set_page_config(page_title="CodeMentor AI", layout="wide")
 st.title("CodeMentor AI")
@@ -126,10 +126,13 @@ with col_right:
         data = res.json()
         df = pd.DataFrame(data)
 
-        plt.figure()
-        plt.bar(df["topic"], [d + 0.1 for d in df["days_since_practice"]])
-        plt.xlabel("Topics")
-        plt.ylabel("Days Since Practice")
-        st.pyplot(plt)
+        fig = px.bar(
+            df,
+            x="topic",
+            y="days_since_practice",
+            title="Forgetting Curve by Topic"
+        )
+
+        st.plotly_chart(fig, width="stretch")
 
     st.metric("Logged in", "Yes")
