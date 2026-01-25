@@ -29,10 +29,27 @@ def knowledge_agent(state: AgentState):
 # -------- Review Agent --------
 def review_agent(state: AgentState):
     prompt = f"""
-You are a DSA mentor.
+You are an expert DSA mentor.
 
-Relevant DSA Concepts:
-{state['context']}
+Your job is NOT to explain theory.
+Your job is to create a compact memory card for the user.
+
+Use this STRICT format. Do not add anything else.
+
+MISTAKE:
+(one line mistake in user's approach)
+
+PATTERN:
+(name of DSA pattern that applies)
+
+COMPLEXITY:
+(expected vs used complexity)
+
+REMINDER:
+(one line mental trigger to remember next time)
+
+CORRECTED CODE:
+(provide optimal Java solution)
 
 Problem:
 {state['title']}
@@ -43,12 +60,10 @@ Description:
 User Code:
 {state['code']}
 
-Give feedback on:
-1. Correctness
-2. Time & Space Complexity
-3. Which DSA pattern applies here and why
-4. How to improve
+Relevant DSA Concepts:
+{state['context']}
 """
+
 
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
