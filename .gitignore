@@ -1,0 +1,16 @@
+# venv
+venv/
+
+# env variables
+.env
+
+# python cache
+__pycache__/
+*.pyc
+
+# FAISS index (we can rebuild anytime)
+backend/faiss_index/
+
+# OS / editor junk
+.DS_Store
+.vscode/
