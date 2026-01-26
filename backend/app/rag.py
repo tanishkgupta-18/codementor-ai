@@ -1,24 +1,38 @@
 import os
 from dotenv import load_dotenv
+
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 load_dotenv()
 
-from langchain_text_splitters import CharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+NOTES_PATH = "backend/knowledge/dsa_notes.txt"
+INDEX_PATH = "backend/app/faiss_index"
 
 
 def build_vectorstore():
-    with open("backend/knowledge/dsa_notes.txt", "r") as f:
+    with open(NOTES_PATH, "r", encoding="utf-8") as f:
         text = f.read()
 
-    splitter = CharacterTextSplitter(chunk_size=300, chunk_overlap=50)
-    docs = splitter.create_documents([text])
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=150
+    )
 
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_documents(docs, embeddings)
-    vectorstore.save_local("backend/faiss_index")
+    documents = splitter.create_documents([text])
+
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+
+    vectorstore = FAISS.from_documents(documents, embeddings)
+    vectorstore.save_local(INDEX_PATH)
 
 
 def load_vectorstore():
-    embeddings = OpenAIEmbeddings()
-    return FAISS.load_local("backend/faiss_index", embeddings, allow_dangerous_deserialization=True)
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+
+    return FAISS.load_local(
+        INDEX_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
