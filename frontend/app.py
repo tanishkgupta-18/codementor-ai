@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import plotly.express as px
 
-# --- CONFIGURATION ---
 API = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="CodeMentor AI", layout="wide")
@@ -39,7 +38,6 @@ def parse_review(text: str):
                 x = x.split(b)[0]
             return x.strip()
         return ""
-
     return (
         part("MISTAKE:", "PATTERN:"),
         part("PATTERN:", "COMPLEXITY:"),
@@ -54,20 +52,18 @@ if st.session_state.token:
         st.session_state.token = None
         st.rerun()
 
-# ---------------- LOGIN / REGISTER ----------------
+# ---------------- LOGIN ----------------
 if st.session_state.token is None:
     st.subheader("Login / Register")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
-
     c1, c2 = st.columns(2)
     with c1:
-        # UPDATED: width='stretch' replaces use_container_width=True
-        if st.button("Register", width="stretch"):
+        if st.button("Register"):
             r = requests.post(f"{API}/register", json={"email": email, "password": password})
             st.success(r.json())
     with c2:
-        if st.button("Login", width="stretch"):
+        if st.button("Login"):
             r = requests.post(f"{API}/login", json={"email": email, "password": password})
             data = r.json()
             if "token" in data:
@@ -79,25 +75,24 @@ if st.session_state.token is None:
 
 headers = {"Authorization": f"Bearer {st.session_state.token}"}
 
-# ---------------- REVIEW ON TOP (FIXED LOGIC) ----------------
+# ---------------- REVIEW ON TOP ----------------
 if st.session_state.review_loading:
     st.info("Analyzing your code...")
 
 if st.session_state.last_review:
     with st.container(border=True):
         st.subheader("AI Mentor Review")
-        
+        # Handle optimal response from backend
         if "MISTAKE:" not in st.session_state.last_review:
             st.success(st.session_state.last_review)
         else:
             m, p, c, r, code = parse_review(st.session_state.last_review)
-            if m: st.markdown(f"**MISTAKE**\n\n{m}")
-            if p: st.markdown(f"**PATTERN**\n\n{p}")
-            if c: st.markdown(f"**COMPLEXITY**\n\n{c}")
-            if r: st.markdown(f"**REMINDER**\n\n{r}")
-            if code:
-                st.markdown("**CORRECTED CODE**")
-                st.code(code, language='python')
+            st.markdown(f"**MISTAKE**\n\n{m}")
+            st.markdown(f"**PATTERN**\n\n{p}")
+            st.markdown(f"**COMPLEXITY**\n\n{c}")
+            st.markdown(f"**REMINDER**\n\n{r}")
+            st.markdown("**CORRECTED CODE**")
+            st.code(code)
 
 # ---------------- DASHBOARD ----------------
 st.divider()
@@ -123,45 +118,41 @@ c4.metric("Least Revised Topic", least_topic)
 st.divider()
 st.header("Fetch LeetCode Problem")
 slug = st.text_input("Problem slug (e.g. two-sum)")
-
 if st.button("Fetch Problem"):
     r = requests.get(f"{API}/fetch-problem", params={"slug": slug})
     st.session_state.problem = r.json()
 
-# ---------------- MAIN LAYOUT ----------------
+# ---------------- LAYOUT ----------------
 left, right = st.columns([2, 1])
 
+# ===== LEFT SIDE =====
 with left:
     if st.session_state.problem:
         p = st.session_state.problem
         soup = BeautifulSoup(p["description"], "html.parser")
         clean = soup.get_text()
         lc_url = f"https://leetcode.com/problems/{slug}/"
-
         with st.container(border=True):
             st.subheader(p["title"])
             st.caption(", ".join(p["topics"]))
-            # UPDATED: width='stretch'
             st.link_button("Open on LeetCode", lc_url, width="stretch")
             st.write(clean)
 
-        code = st.text_area("Paste your solution", height=300)
-
-        if st.button("Review Code", type="primary"):
+        code = st.text_area("Paste your solution", height=220)
+        if st.button("Review Code"):
             st.session_state.review_loading = True
             st.session_state.last_review = None
             payload = {"title": p["title"], "description": clean, "code": code, "topics": p["topics"]}
-
             with st.spinner("Analyzing your code..."):
                 r = requests.post(f"{API}/review-code", json=payload, headers=headers)
                 data = r.json()
-
             st.session_state.last_review = data.get("review", "Your solution is already optimal.")
             st.session_state.review_loading = False
             st.rerun()
 
+# ===== RIGHT SIDE =====
 with right:
-    # --- Revision Section ---
+    # -------- Revision Today --------
     st.subheader("Revision Due Today")
     if not rev_res:
         st.success("No revisions due today")
@@ -171,7 +162,7 @@ with right:
                 st.write(item["pattern"])
                 st.caption(f"Level {item['level']} • Next {item['next_revision']}")
 
-    # --- Topic Health ---
+    # -------- Topic Health --------
     st.divider()
     st.subheader("Topic Health")
     if not heat_res:
@@ -180,37 +171,56 @@ with right:
         for h in heat_res:
             color = {"Fresh": "#2ecc71", "Revise Soon": "#f39c12", "Forgotten": "#e74c3c"}.get(h["status"], "#bdc3c7")
             with st.container(border=True):
-                c1_h, c2_h = st.columns([3, 1])
-                with c1_h:
+                c1, c2 = st.columns([3, 1])
+                with c1:
                     st.write(h["topic"])
-                    st.caption(f"{h['days_since_practice']} days ago")
-                with c2_h:
-                    st.markdown(f'<div style="background:{color};padding:5px;border-radius:5px;text-align:center;color:white;font-size:12px;">{h["status"]}</div>', unsafe_allow_html=True)
+                    st.caption(f"{h['days_since_practice']} days since practice")
+                with c2:
+                    st.markdown(f'<div style="background:{color};padding:8px;border-radius:6px;text-align:center;color:white;">{h["status"]}</div>', unsafe_allow_html=True)
 
-    # --- Redo Problems ---
+    # -------- Redo Problems (Added Remove Logic) --------
     st.divider()
     st.subheader("Redo Problems")
-    for rd in redo_res:
+    for r_item in redo_res:
         with st.container(border=True):
-            st.write(rd["title"])
-            # UPDATED: width='stretch'
-            st.link_button("Try Again", f"https://leetcode.com/problems/{rd['slug']}/", width="stretch")
+            st.write(f"**{r_item['title']}**")
+            st.caption(r_item["pattern"])
+            st.write(r_item["mistake"])
+            
+            # Action buttons
+            b1, b2 = st.columns(2)
+            with b1:
+                st.link_button("Open LeetCode", f"https://leetcode.com/problems/{r_item['slug']}/", width="stretch")
+            with b2:
+                # Backend logic integration for Remove
+                if st.button("Remove", key=f"del_{r_item['slug']}", width="stretch"):
+                    requests.delete(f"{API}/redo-list/{r_item['slug']}", headers=headers)
+                    st.rerun()
 
-    # --- Mistake History (Chart) ---
+    # -------- Flashcards --------
     st.divider()
-    st.subheader("Mistake Patterns")
+    st.subheader("Today’s Flashcards")
+    for c in flash_res[:5]:
+        with st.container(border=True):
+            st.caption(f"{c['pattern']} • {c['count']} times")
+            st.write("Mistake:", c["mistake"])
+            st.write("Reminder:", c["reminder"])
+
+    # -------- Mistake Frequency Graph --------
+    st.divider()
+    st.subheader("Mistake Frequency")
     mh = safe_get(f"{API}/mistake-history", headers)
     if mh:
-        df_mh = pd.DataFrame(mh)
-        fig = px.bar(df_mh, x="pattern", y="count")
-        # UPDATED: width='stretch' replaces use_container_width=True
+        df = pd.DataFrame(mh)
+        fig = px.bar(df, x="pattern", y="count")
         st.plotly_chart(fig, width="stretch")
 
-    # --- Weak Patterns (Dataframe) ---
+    # -------- Weak Patterns Table --------
     st.divider()
-    st.subheader("Weak Patterns")
+    st.subheader("Your Weak Patterns")
     stats = safe_get(f"{API}/pattern-stats", headers)
     if stats:
-        df_s = pd.DataFrame(stats)
-        # UPDATED: width='stretch'
-        st.dataframe(df_s[["pattern", "count", "status"]], width="stretch")
+        df_stats = pd.DataFrame(stats)
+        if "last_date" in df_stats.columns:
+            df_stats["last_date"] = pd.to_datetime(df_stats["last_date"]).dt.date
+        st.dataframe(df_stats[["pattern", "count", "last_date", "status"]], width="stretch")
