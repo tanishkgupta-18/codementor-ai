@@ -19,14 +19,13 @@ from backend.app.flashcards import get_flashcards
 
 app = FastAPI()
 
-# Redis / Valkey connection for review status
+# Valkey / Redis (review status DB)
 r = redis.Redis(host="localhost", port=6379, db=1)
 
 
 # ---------- Request Model ----------
 class ReviewRequest(BaseModel):
     code: str
-    user_id: str
     title: str
     description: str
     topics: List[str]
@@ -69,24 +68,27 @@ def fetch_problem(slug: str = Query(...)):
     }
     """
     res = requests.post(url, json={"query": query, "variables": {"titleSlug": slug}})
-    data = res.json()["data"]["question"]
+    q = res.json()["data"]["question"]
+
+    if not q:
+        return {"error": "Problem not found"}
 
     return {
-        "title": data["title"],
-        "description": data["content"][:1200],
-        "topics": [t["name"] for t in data["topicTags"]]
+        "title": q["title"],
+        "description": q["content"] or "",
+        "topics": [t["name"] for t in q["topicTags"]]
     }
 
 
-# ---------- REVIEW CODE (NOW ASYNC) ----------
+# ---------- REVIEW CODE (ASYNC WITH CELERY) ----------
 @app.post("/review_code")
-def review_code(req: ReviewRequest):
+def review_code(req: ReviewRequest, user_id: str = Depends(get_current_user)):
     review_id = str(uuid.uuid4())
 
     review_code_task.delay(
         review_id,
         req.code,
-        req.user_id,
+        user_id,
         req.title,
         req.description,
         req.topics
@@ -95,7 +97,7 @@ def review_code(req: ReviewRequest):
     return {"review_id": review_id, "status": "PROCESSING"}
 
 
-# ---------- REVIEW STATUS ----------
+# ---------- REVIEW STATUS (POLLING) ----------
 @app.get("/review_status/{review_id}")
 def review_status(review_id: str):
     status = r.get(f"review:{review_id}")

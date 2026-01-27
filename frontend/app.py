@@ -3,12 +3,13 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import plotly.express as px
+import time
 
 API = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="CodeMentor AI", layout="wide")
 st.title("CodeMentor AI")
-st.caption("An AI-powered DSA learning system that tracks your mistakes, decay, and spaced revision automatically.")
+st.caption("AI-powered DSA learning with mistakes, decay & spaced repetition")
 
 # ---------------- SESSION ----------------
 for k, v in {
@@ -20,6 +21,7 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
+
 # ---------------- HELPERS ----------------
 def safe_get(url, headers):
     try:
@@ -30,7 +32,8 @@ def safe_get(url, headers):
         pass
     return []
 
-def parse_review(text: str):
+
+def parse_review(text):
     def part(a, b=None):
         if a in text:
             x = text.split(a)[1]
@@ -43,31 +46,32 @@ def parse_review(text: str):
         part("PATTERN:", "COMPLEXITY:"),
         part("COMPLEXITY:", "REMINDER:"),
         part("REMINDER:", "CORRECTED CODE:"),
-        part("CORRECTED CODE:"),
+        part("CORRECTED CODE:")
     )
 
-# ---------------- LOGOUT ----------------
+
+# ---------------- AUTH ----------------
 if st.session_state.token:
     if st.sidebar.button("Logout"):
         st.session_state.token = None
         st.rerun()
 
-# ---------------- LOGIN ----------------
 if st.session_state.token is None:
     st.subheader("Login / Register")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
+
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Register"):
-            r = requests.post(f"{API}/register", json={"email": email, "password": password})
-            st.success(r.json())
+            st.success(
+                requests.post(f"{API}/register", json={"email": email, "password": password}).json()
+            )
     with c2:
         if st.button("Login"):
-            r = requests.post(f"{API}/login", json={"email": email, "password": password})
-            data = r.json()
-            if "token" in data:
-                st.session_state.token = data["token"]
+            res = requests.post(f"{API}/login", json={"email": email, "password": password}).json()
+            if "token" in res:
+                st.session_state.token = res["token"]
                 st.rerun()
             else:
                 st.error("Invalid credentials")
@@ -75,14 +79,14 @@ if st.session_state.token is None:
 
 headers = {"Authorization": f"Bearer {st.session_state.token}"}
 
-# ---------------- REVIEW ON TOP ----------------
+
+# ---------------- REVIEW DISPLAY ----------------
 if st.session_state.review_loading:
     st.info("Analyzing your code...")
 
 if st.session_state.last_review:
     with st.container(border=True):
         st.subheader("AI Mentor Review")
-        # Handle optimal response from backend
         if "MISTAKE:" not in st.session_state.last_review:
             st.success(st.session_state.last_review)
         else:
@@ -91,122 +95,123 @@ if st.session_state.last_review:
             st.markdown(f"**PATTERN**\n\n{p}")
             st.markdown(f"**COMPLEXITY**\n\n{c}")
             st.markdown(f"**REMINDER**\n\n{r}")
-            st.markdown("**CORRECTED CODE**")
-            st.code(code)
+            st.code(code, language="cpp")
+
 
 # ---------------- DASHBOARD ----------------
 st.divider()
 st.header("Your Learning Dashboard")
 
-rev_res = safe_get(f"{API}/revision-today", headers)
-redo_res = safe_get(f"{API}/redo-list", headers)
-flash_res = safe_get(f"{API}/flashcards", headers)
-heat_res = safe_get(f"{API}/heatmap", headers)
-
-least_topic = "-"
-if heat_res:
-    weakest = max(heat_res, key=lambda x: x["days_since_practice"])
-    least_topic = weakest["topic"]
+rev = safe_get(f"{API}/revision-today", headers)
+redo = safe_get(f"{API}/redo-list", headers)
+flash = safe_get(f"{API}/flashcards", headers)
+heat = safe_get(f"{API}/heatmap", headers)
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Revisions Due", len(rev_res))
-c2.metric("Redo Problems", len(redo_res))
-c3.metric("Flashcards", len(flash_res))
-c4.metric("Least Revised Topic", least_topic)
+c1.metric("Revisions Due", len(rev))
+c2.metric("Redo Problems", len(redo))
+c3.metric("Flashcards", len(flash))
+least = max(heat, key=lambda x: x["days_since_practice"])["topic"] if heat else "-"
+c4.metric("Least Revised Topic", least)
+
 
 # ---------------- FETCH PROBLEM ----------------
 st.divider()
-st.header("Fetch LeetCode Problem")
-slug = st.text_input("Problem slug (e.g. two-sum)")
+slug = st.text_input("LeetCode slug (e.g. two-sum)")
 if st.button("Fetch Problem"):
-    r = requests.get(f"{API}/fetch-problem", params={"slug": slug})
-    st.session_state.problem = r.json()
+    st.session_state.problem = requests.get(
+        f"{API}/fetch-problem", params={"slug": slug}
+    ).json()
+
 
 # ---------------- LAYOUT ----------------
 left, right = st.columns([2, 1])
 
-# ===== LEFT SIDE =====
+# ===== LEFT =====
 with left:
     if st.session_state.problem:
         p = st.session_state.problem
         soup = BeautifulSoup(p["description"], "html.parser")
         clean = soup.get_text()
-        lc_url = f"https://leetcode.com/problems/{slug}/"
-        with st.container(border=True):
-            st.subheader(p["title"])
-            st.caption(", ".join(p["topics"]))
-            st.link_button("Open on LeetCode", lc_url, width="stretch")
-            st.write(clean)
 
-        code = st.text_area("Paste your solution", height=220)
+        st.subheader(p["title"])
+        st.caption(", ".join(p["topics"]))
+        st.link_button(
+            "Open on LeetCode",
+            f"https://leetcode.com/problems/{slug}/",
+            width="stretch"
+        )
+        st.write(clean)
+
+        code = st.text_area("Paste your code", height=220)
+
         if st.button("Review Code"):
             st.session_state.review_loading = True
-            st.session_state.last_review = None
-            payload = {"title": p["title"], "description": clean, "code": code, "topics": p["topics"]}
-            with st.spinner("Analyzing your code..."):
-                r = requests.post(f"{API}/review-code", json=payload, headers=headers)
-                data = r.json()
-            st.session_state.last_review = data.get("review", "Your solution is already optimal.")
-            st.session_state.review_loading = False
             st.rerun()
 
-# ===== RIGHT SIDE =====
-with right:
-    # -------- Revision Today --------
-    st.subheader("Revision Due Today")
-    if not rev_res:
-        st.success("No revisions due today")
-    else:
-        for item in rev_res:
-            with st.container(border=True):
-                st.write(item["pattern"])
-                st.caption(f"Level {item['level']} • Next {item['next_revision']}")
+        if st.session_state.review_loading:
+            payload = {
+                "title": p["title"],
+                "description": clean,
+                "code": code,
+                "topics": p["topics"]
+            }
 
-    # -------- Topic Health --------
-    st.divider()
-    st.subheader("Topic Health")
-    if not heat_res:
-        st.caption("No topic data yet.")
-    else:
-        for h in heat_res:
-            color = {"Fresh": "#2ecc71", "Revise Soon": "#f39c12", "Forgotten": "#e74c3c"}.get(h["status"], "#bdc3c7")
-            with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    st.write(h["topic"])
-                    st.caption(f"{h['days_since_practice']} days since practice")
-                with c2:
-                    st.markdown(f'<div style="background:{color};padding:8px;border-radius:6px;text-align:center;color:white;">{h["status"]}</div>', unsafe_allow_html=True)
+            rid = requests.post(
+                f"{API}/review_code",
+                json=payload,
+                headers=headers
+            ).json()["review_id"]
 
-    # -------- Redo Problems (Added Remove Logic) --------
-    st.divider()
-    st.subheader("Redo Problems")
-    for r_item in redo_res:
-        with st.container(border=True):
-            st.write(f"**{r_item['title']}**")
-            st.caption(r_item["pattern"])
-            st.write(r_item["mistake"])
-            
-            # Action buttons
-            b1, b2 = st.columns(2)
-            with b1:
-                st.link_button("Open LeetCode", f"https://leetcode.com/problems/{r_item['slug']}/", width="stretch")
-            with b2:
-                # Backend logic integration for Remove
-                if st.button("Remove", key=f"del_{r_item['slug']}", width="stretch"):
-                    requests.delete(f"{API}/redo-list/{r_item['slug']}", headers=headers)
+            while True:
+                status = requests.get(
+                    f"{API}/review_status/{rid}"
+                ).json()
+
+                if status["status"] == "DONE":
+                    st.session_state.last_review = status["result"]
+                    st.session_state.review_loading = False
                     st.rerun()
 
-    # -------- Flashcards --------
+                time.sleep(1)
+
+
+# ===== RIGHT =====
+with right:
+    # ---- Revisions ----
+    st.subheader("Revision Due Today")
+    for item in rev:
+        with st.container(border=True):
+            st.write(item["pattern"])
+            st.caption(f"Level {item['level']} • Next {item['next_revision']}")
+
+    # ---- Redo ----
+    st.divider()
+    st.subheader("Redo Problems")
+    for r in redo:
+        with st.container(border=True):
+            st.write(f"**{r['title']}**")
+            st.caption(r["pattern"])
+            st.write(r["mistake"])
+            st.link_button(
+                "Open LeetCode",
+                f"https://leetcode.com/problems/{r['slug']}/",
+                width="stretch"
+            )
+            if st.button("Remove", key=r["slug"], width="stretch"):
+                requests.delete(f"{API}/redo-list/{r['slug']}", headers=headers)
+                st.rerun()
+
+    # ---- Flashcards ----
     st.divider()
     st.subheader("Today’s Flashcards")
-    for c in flash_res[:5]:
+    for c in flash[:5]:
         with st.container(border=True):
             st.caption(f"{c['pattern']} • {c['count']} times")
             st.write("Mistake:", c["mistake"])
             st.write("Reminder:", c["reminder"])
 
-    # -------- Mistake Frequency Graph --------
+    # ---- Graph ----
     st.divider()
     st.subheader("Mistake Frequency")
     mh = safe_get(f"{API}/mistake-history", headers)
@@ -215,9 +220,9 @@ with right:
         fig = px.bar(df, x="pattern", y="count")
         st.plotly_chart(fig, width="stretch")
 
-    # -------- Weak Patterns Table --------
+    # ---- Table ----
     st.divider()
-    st.subheader("Your Weak Patterns")
+    st.subheader("Weak Patterns")
     stats = safe_get(f"{API}/pattern-stats", headers)
     if stats:
         df_stats = pd.DataFrame(stats)
