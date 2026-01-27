@@ -20,3 +20,5 @@ argon2-cffi
 
 pandas
 plotly
+celery
+redis

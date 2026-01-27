@@ -1,13 +1,12 @@
 from langgraph.graph import StateGraph
 from typing import TypedDict
-from backend.app.rag import load_vectorstore
+from backend.app.rag import get_cached_context
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-vectorstore = load_vectorstore()
 
 
 class AgentState(TypedDict):
@@ -18,10 +17,10 @@ class AgentState(TypedDict):
     review: str
 
 
-# -------- Knowledge Agent --------
+# -------- Knowledge Agent (RAG with Valkey Cache) --------
 def knowledge_agent(state: AgentState):
-    docs = vectorstore.similarity_search(state["description"], k=2)
-    context = "\n".join([doc.page_content for doc in docs])
+    query = state["description"]
+    context = get_cached_context(query)
     state["context"] = context
     return state
 
@@ -131,7 +130,6 @@ User Code:
 Relevant DSA Concepts:
 {state['context']}
 """
-
 
     response = client.chat.completions.create(
         model="gpt-4.1-mini",

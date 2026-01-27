@@ -1,33 +1,35 @@
-from fastapi import FastAPI, Query, Body, Depends
+from fastapi import FastAPI, Query, Depends
+from pydantic import BaseModel
+from typing import List
 import requests
-import os
-import re
-from dotenv import load_dotenv
+import uuid
+import redis
 from datetime import datetime, timezone
 
-from backend.app.patterns import normalize_pattern
-from backend.app.db import reviews, users, redo_list, revision_queue
+from workers.review_task import review_code_task
+from backend.app.db import users, redo_list, revision_queue, reviews
 from backend.app.auth import (
     hash_password,
     verify_password,
     create_token,
     get_current_user,
 )
-from backend.app.agents import build_graph
 from backend.app.heatmap import topic_heatmap
 from backend.app.flashcards import get_flashcards
-from backend.app.spaced import next_date
 
-load_dotenv()
-graph = build_graph()
 app = FastAPI()
 
+# Redis / Valkey connection for review status
+r = redis.Redis(host="localhost", port=6379, db=1)
 
-# ---------- helpers ----------
-def extract(field, text):
-    pattern = rf"{field}:\s*(.+)"
-    match = re.search(pattern, text)
-    return match.group(1).strip() if match else "Unknown"
+
+# ---------- Request Model ----------
+class ReviewRequest(BaseModel):
+    code: str
+    user_id: str
+    title: str
+    description: str
+    topics: List[str]
 
 
 # ---------- AUTH ----------
@@ -76,65 +78,36 @@ def fetch_problem(slug: str = Query(...)):
     }
 
 
-# ---------- REVIEW CODE ----------
-@app.post("/review-code")
-def review_code(problem: dict = Body(...), user_id: str = Depends(get_current_user)):
-    result = graph.invoke({
-        "title": problem["title"],
-        "description": problem["description"],
-        "code": problem["code"],
-        "context": "",
-        "review": ""
-    })
+# ---------- REVIEW CODE (NOW ASYNC) ----------
+@app.post("/review_code")
+def review_code(req: ReviewRequest):
+    review_id = str(uuid.uuid4())
 
-    review_text = result["review"]
+    review_code_task.delay(
+        review_id,
+        req.code,
+        req.user_id,
+        req.title,
+        req.description,
+        req.topics
+    )
 
-    if "NO_MISTAKE" in review_text:
-        return {"review": "Your solution is already optimal. No mistakes detected."}
+    return {"review_id": review_id, "status": "PROCESSING"}
 
-    pattern = normalize_pattern(extract("PATTERN", review_text))
-    mistake = extract("MISTAKE", review_text)
-    now = datetime.now(timezone.utc)
 
-    # spaced repetition
-    rq = revision_queue.find_one({"user_id": user_id, "pattern": pattern})
-    if not rq:
-        revision_queue.insert_one({
-            "user_id": user_id,
-            "pattern": pattern,
-            "level": 1,
-            "next_revision": next_date(1)
-        })
-    else:
-        if rq["next_revision"].date() != now.date():
-            level = min(rq["level"] + 1, 4)
-            revision_queue.update_one(
-                {"_id": rq["_id"]},
-                {"$set": {"level": level, "next_revision": next_date(level)}}
-            )
+# ---------- REVIEW STATUS ----------
+@app.get("/review_status/{review_id}")
+def review_status(review_id: str):
+    status = r.get(f"review:{review_id}")
 
-    # save review
-    reviews.insert_one({
-        "user_id": user_id,
-        "title": problem["title"],
-        "topics": problem.get("topics", []),
-        "pattern": pattern,
-        "review": review_text,
-        "date": now
-    })
+    if not status:
+        return {"status": "NOT_FOUND"}
 
-    # redo list
-    if not redo_list.find_one({"user_id": user_id, "title": problem["title"]}):
-        redo_list.insert_one({
-            "user_id": user_id,
-            "title": problem["title"],
-            "slug": problem["title"].lower().replace(" ", "-"),
-            "pattern": pattern,
-            "mistake": mistake,
-            "added_on": now
-        })
+    if status.decode() == "DONE":
+        result = r.get(f"review:{review_id}:result").decode()
+        return {"status": "DONE", "result": result}
 
-    return {"review": review_text}
+    return {"status": "PROCESSING"}
 
 
 # ---------- ANALYTICS ----------
