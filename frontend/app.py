@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import time
 
-API = "http://127.0.0.1:8000"
+API = "http://backend:8000"
 
 st.set_page_config(page_title="CodeMentor AI", layout="wide")
 st.title("CodeMentor AI")

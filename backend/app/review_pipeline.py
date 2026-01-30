@@ -4,6 +4,7 @@ from backend.app.db import reviews, redo_list, revision_queue
 from backend.app.spaced import next_date
 from backend.app.agents import build_graph
 import re
+import os
 import hashlib
 import json
 import redis
@@ -11,7 +12,8 @@ import redis
 graph = build_graph()
 
 # Valkey
-r = redis.Redis(host="localhost", port=6379, db=2)
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+r = redis.Redis(host=REDIS_HOST, port=6379, db=1)
 
 
 def extract(field, text):

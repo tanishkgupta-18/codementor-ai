@@ -1,0 +1,72 @@
+services:
+
+  mongo:
+    image: mongo:7
+    container_name: codementor-mongo
+    ports:
+      - "27017:27017"
+
+  valkey:
+    image: valkey/valkey
+    container_name: codementor-valkey
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: codementor-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: codementor-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo
+      - valkey
+      - rabbitmq
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - REDIS_HOST=valkey
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq  
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+    container_name: codementor-worker
+    depends_on:
+      - backend
+      - rabbitmq
+      - valkey
+      - mongo
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - REDIS_HOST=valkey
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq  
+
+  frontend:
+    image: python:3.11-slim
+    container_name: codementor-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - ./requirements.txt:/app/requirements.txt
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             streamlit run app.py --server.port 8501 --server.address 0.0.0.0"
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend

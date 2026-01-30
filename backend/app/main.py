@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List
 import requests
 import uuid
+import os
 import redis
 from datetime import datetime, timezone
 
@@ -20,7 +21,8 @@ from backend.app.flashcards import get_flashcards
 app = FastAPI()
 
 # Valkey / Redis (review status DB)
-r = redis.Redis(host="localhost", port=6379, db=1)
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+r = redis.Redis(host=REDIS_HOST, port=6379, db=1)
 
 
 # ---------- Request Model ----------

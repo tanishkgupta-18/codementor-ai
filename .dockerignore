@@ -1,0 +1,20 @@
+.git
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+node_modules
+*.db
+*.log
+.DS_Store
+
+# frontend not needed in backend/worker images
+frontend
+
+# local FAISS index should NOT go into image
+backend/app/faiss_index
+
+# Streamlit cache (if present)
+.streamlit
