@@ -25,7 +25,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: codementor-backend
     ports:
-      - "8000:8000"
+      - "18000:8000"
     depends_on:
       - mongo
       - valkey
@@ -70,3 +70,22 @@ services:
       - "8501:8501"
     depends_on:
       - backend
+
+  prometheus:
+    image: prom/prometheus
+    container_name: codementor-prometheus
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "19090:9090"
+    depends_on:
+      - backend
+      - worker
+
+  grafana:
+    image: grafana/grafana
+    container_name: codementor-grafana
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus

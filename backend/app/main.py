@@ -1,11 +1,16 @@
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, Request
 from pydantic import BaseModel
 from typing import List
 import requests
 import uuid
 import os
 import redis
+import time
+import logging
 from datetime import datetime, timezone
+
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from starlette.responses import Response
 
 from workers.review_task import review_code_task
 from backend.app.db import users, redo_list, revision_queue, reviews
@@ -18,9 +23,56 @@ from backend.app.auth import (
 from backend.app.heatmap import topic_heatmap
 from backend.app.flashcards import get_flashcards
 
+
+# ---------- METRICS ----------
+REQUEST_COUNT = Counter(
+    "fastapi_requests_total",
+    "Total FastAPI Requests",
+    ["method", "endpoint"]
+)
+
+REQUEST_LATENCY = Histogram(
+    "fastapi_request_latency_seconds",
+    "Latency per endpoint",
+    ["endpoint"]
+)
+
+
 app = FastAPI()
 
-# Valkey / Redis (review status DB)
+# ---------- LOGGING ----------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+# ---------- MIDDLEWARE FOR METRICS ----------
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start_time = time.time()
+
+    response = await call_next(request)
+
+    latency = time.time() - start_time
+    endpoint = request.url.path
+
+    REQUEST_COUNT.labels(request.method, endpoint).inc()
+    REQUEST_LATENCY.labels(endpoint).observe(latency)
+
+    logger.info(f"{request.method} {endpoint} | {latency:.3f}s")
+
+    return response
+
+
+# ---------- /metrics endpoint for Prometheus ----------
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+# ---------- Valkey / Redis (review status DB) ----------
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 r = redis.Redis(host=REDIS_HOST, port=6379, db=1)
 
@@ -86,6 +138,8 @@ def fetch_problem(slug: str = Query(...)):
 @app.post("/review_code")
 def review_code(req: ReviewRequest, user_id: str = Depends(get_current_user)):
     review_id = str(uuid.uuid4())
+
+    logger.info(f"Review requested by {user_id} | title={req.title}")
 
     review_code_task.delay(
         review_id,

@@ -10,10 +10,12 @@ celery_app = Celery(
     backend=f"redis://{REDIS_HOST}:6379/0",
 )
 
-# Tell Celery where tasks are
 celery_app.autodiscover_tasks(["workers"])
 
-# Route review task to correct queue
 celery_app.conf.task_routes = {
     "workers.review_task.review_code_task": {"queue": "review_queue"}
 }
+
+# Reliability
+celery_app.conf.task_acks_late = True
+celery_app.conf.worker_prefetch_multiplier = 1
