@@ -55,26 +55,32 @@ if st.session_state.token:
     if st.sidebar.button("Logout"):
         st.session_state.token = None
         st.rerun()
+else:
+    st.subheader("Welcome to CodeMentor AI")
+    
+    with st.form("auth_form"):
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+        
+        c1, c2 = st.columns(2)
+        submit_login = c1.form_submit_button("Login", use_container_width=True)
+        submit_reg = c2.form_submit_button("Register", use_container_width=True)
 
-if st.session_state.token is None:
-    st.subheader("Login / Register")
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+    if submit_login:
+        res = requests.post(f"{API}/login", json={"email": email, "password": password}).json()
+        if "token" in res:
+            st.session_state.token = res["token"]
+            st.rerun()
+        else:
+            st.error(res.get("detail", "Invalid credentials"))
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Register"):
-            st.success(
-                requests.post(f"{API}/register", json={"email": email, "password": password}).json()
-            )
-    with c2:
-        if st.button("Login"):
-            res = requests.post(f"{API}/login", json={"email": email, "password": password}).json()
-            if "token" in res:
-                st.session_state.token = res["token"]
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
+    if submit_reg:
+        res = requests.post(f"{API}/register", json={"email": email, "password": password})
+        if res.status_code == 200:
+            st.success("Account created! You can now login.")
+        else:
+            st.error(res.json().get("detail", "Registration failed"))
+
     st.stop()
 
 headers = {"Authorization": f"Bearer {st.session_state.token}"}
@@ -87,15 +93,28 @@ if st.session_state.review_loading:
 if st.session_state.last_review:
     with st.container(border=True):
         st.subheader("AI Mentor Review")
+        
         if "MISTAKE:" not in st.session_state.last_review:
             st.success(st.session_state.last_review)
         else:
-            m, p, c, r, code = parse_review(st.session_state.last_review)
+            m, p, c, r, raw_code = parse_review(st.session_state.last_review)
+            
+            clean_code = raw_code.strip()
+            if clean_code.startswith("```"):
+            
+                lines = clean_code.splitlines()
+                if len(lines) > 2:
+                    clean_code = "\n".join(lines[1:-1])
+                else:
+                    clean_code = clean_code.replace("```", "")
+            
             st.markdown(f"**MISTAKE**\n\n{m}")
             st.markdown(f"**PATTERN**\n\n{p}")
             st.markdown(f"**COMPLEXITY**\n\n{c}")
             st.markdown(f"**REMINDER**\n\n{r}")
-            st.code(code, language="cpp")
+            
+            st.write("**CORRECTED CODE**")
+            st.code(clean_code, language=None)
 
 
 # ---------------- DASHBOARD ----------------
@@ -175,15 +194,20 @@ with left:
 
                 time.sleep(1)
 
-
 # ===== RIGHT =====
 with right:
-    # ---- Revisions ----
     st.subheader("Revision Due Today")
     for item in rev:
         with st.container(border=True):
-            st.write(item["pattern"])
-            st.caption(f"Level {item['level']} • Next {item['next_revision']}")
+            st.write(f"**{item['pattern']}**")
+            
+            raw_date = item.get('next_revision', "")
+            if raw_date:
+                clean_date = pd.to_datetime(raw_date).strftime("%b %d, %I:%M %p")
+            else:
+                clean_date = "Pending"
+                
+            st.caption(f"Level {item['level']} • {clean_date}")
 
     # ---- Redo ----
     st.divider()

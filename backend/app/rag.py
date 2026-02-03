@@ -69,7 +69,7 @@ def get_cached_context(query: str) -> str:
     if cached:
         return cached.decode()
 
-    vectorstore = get_vectorstore()   # ✅ lazy load here
+    vectorstore = get_vectorstore()   # lazy load
 
     docs = vectorstore.similarity_search(query, k=4)
     context = "\n\n".join([d.page_content for d in docs])
