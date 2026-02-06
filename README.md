@@ -27,7 +27,6 @@ While practicing DSA:
 
 ## 🧠 High-Level Architecture
 
-![Image](https://miro.medium.com/v2/resize%3Afit%3A1200/1%2AYwDZ4-ZLxwWy3BRDsHg83A.png)
 
 ![Image](https://miro.medium.com/v2/resize%3Afit%3A1400/1%2AFRkffS6BCCU36LBHglfF9A.png)
 
