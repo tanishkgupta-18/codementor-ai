@@ -26,12 +26,7 @@ While practicing DSA:
 ---
 
 ## 🧠 High-Level Architecture
-**Observability Layer**
-
-```
-Prometheus → FastAPI + Worker → Grafana Dashboard
-```
-
+![Image][public/diagram.png]
 ---
 
 ## ⚙️ Tech Stack (and why)
