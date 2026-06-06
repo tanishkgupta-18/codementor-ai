@@ -26,27 +26,6 @@ While practicing DSA:
 ---
 
 ## 🧠 High-Level Architecture
-
-
-![Image](https://miro.medium.com/v2/resize%3Afit%3A1400/1%2AFRkffS6BCCU36LBHglfF9A.png)
-
-![Image](https://knowledge.dataiku.com/latest/_images/rag-pipeline.png)
-
-![Image](https://miro.medium.com/v2/resize%3Afit%3A537/1%2A15RRWQMoRI6qdGEzPiWIJQ.png)
-
-```
-Streamlit UI
-     │
-     ▼
-  FastAPI  ──► RabbitMQ ──► Celery Worker
-     │                          │
-     │                          ▼
-     │                   RAG (FAISS) + OpenAI
-     │                          │
-     ▼                          ▼
-  MongoDB                Redis (review status)
-```
-
 **Observability Layer**
 
 ```
