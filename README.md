@@ -26,7 +26,7 @@ While practicing DSA:
 ---
 
 ## 🧠 High-Level Architecture
-![Image][public/diagram.png]
+![Image](public/diagram.png)
 ---
 
 ## ⚙️ Tech Stack (and why)
