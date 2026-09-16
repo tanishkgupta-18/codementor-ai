@@ -21,35 +21,7 @@ Learning Data Structures & Algorithms from platforms like LeetCode is inefficien
 
 ## 2. High-Level Architecture
 
-![Image](https://miro.medium.com/v2/resize%3Afit%3A1200/1%2AYwDZ4-ZLxwWy3BRDsHg83A.png)
-
-![Image](https://miro.medium.com/v2/resize%3Afit%3A1400/1%2AR5uEj4as1GAT4OaAWKzz7A.png)
-
-![Image](https://knowledge.dataiku.com/latest/_images/rag-pipeline.png)
-
-![Image](https://miro.medium.com/v2/resize%3Afit%3A537/1%2A15RRWQMoRI6qdGEzPiWIJQ.png)
-
-```
-User (Streamlit UI)
-        │
-        ▼
-     FastAPI
-        │
-        ▼
-    RabbitMQ Queue
-        │
-        ▼
-     Celery Worker
-        │
-        ▼
- RAG (FAISS) + OpenAI Review
-        │
-        ▼
-      MongoDB
-        │
-        ▼
-  Streamlit Dashboard
-```
+![Image](public/architecture.png)
 
 **Observability Layer**
 
@@ -130,10 +102,6 @@ This allows monitoring:
 * System load
 * Worker performance
 * Bottlenecks in review pipeline
-
-*(Grafana screenshot here)*
-
----
 
 ## 7. Failure Handling & Reliability
 
