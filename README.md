@@ -27,6 +27,62 @@ While practicing DSA:
 
 ## 🧠 High-Level Architecture
 ![Image](public/diagram.png)
+
+## Architecture
+```mermaid
+flowchart TD
+    classDef client fill:#3B82F6,stroke:#1D4ED8,stroke-width:2px,color:#FFFFFF;
+    classDef gateway fill:#8B5CF6,stroke:#6D28D9,stroke-width:2px,color:#FFFFFF;
+    classDef broker fill:#F59E0B,stroke:#D97706,stroke-width:2px,color:#FFFFFF;
+    classDef worker fill:#10B981,stroke:#047857,stroke-width:2px,color:#FFFFFF;
+    classDef ai fill:#EC4899,stroke:#BE185D,stroke-width:2px,color:#FFFFFF;
+    classDef db fill:#06B6D4,stroke:#0E7490,stroke-width:2px,color:#FFFFFF;
+    classDef cache fill:#EF4444,stroke:#B91C1C,stroke-width:2px,color:#FFFFFF;
+    classDef obs fill:#64748B,stroke:#334155,stroke-width:2px,color:#FFFFFF;
+    subgraph ClientLayer ["1. Client & Presentation Layer"]
+        UI["Streamlit Frontend<br/>(Port: 8501)"]:::client
+    end
+    subgraph GatewayLayer ["2. API Gateway & Ingress Layer"]
+        API["FastAPI Gateway (Uvicorn)<br/>(Port: 18000)"]:::gateway
+    end
+    subgraph CachingLayer ["3. In-Memory Caching & Status"]
+        Redis["Valkey / Redis<br/>(Port: 6379)<br/>• Session & Rate Limiting<br/>• Status: review:id (PENDING / PROCESSING / DONE)<br/>• Result: review:id:result"]:::cache
+    end
+    subgraph QueueLayer ["4. Asynchronous Task Buffering"]
+        RabbitMQ["RabbitMQ Message Broker<br/>(Port: 5672 / 15672)<br/>• Direct Exchange<br/>• Durable Queue: review_queue"]:::broker
+    end
+    subgraph ComputeLayer ["5. Distributed Worker & AI Pipeline"]
+        Worker["Celery Worker Pool<br/>(review_code_task)<br/>• Prefetch QoS = 1<br/>• Exponential Backoff Retries"]:::worker
+        FAISS[("FAISS Vector Index<br/>(dsa_notes.txt)<br/>Sub-5ms Semantic Search")]:::ai
+        OpenAI["OpenAI Multi-Agent Reviewer<br/>• Agent 1: Code Reviewer<br/>• Agent 2: Mistake Extractor"]:::ai
+    end
+    subgraph PersistenceLayer ["6. Document Persistence & Analytics"]
+        Mongo[("MongoDB 7<br/>(Port: 27017)<br/>• reviews<br/>• mistakes<br/>• revision_queue<br/>• users")]:::db
+    end
+    subgraph ObsLayer ["7. Observability & Telemetry"]
+        Prometheus["Prometheus<br/>(Port: 19090)<br/>Scrapes :8000 & :9100"]:::obs
+        Grafana["Grafana Dashboards<br/>(Port: 13000)<br/>P95 Task Latency & Throughput"]:::obs
+    end
+    UI -- "1. POST /review_code<br/>(Code + Problem Meta)" --> API
+    API -- "2. Verify JWT & Rate Limit" --> Redis
+    API -- "3. Set review:id = PENDING" --> Redis
+    API -- "4. Publish review_code_task" --> RabbitMQ
+    API -- "5. Return HTTP 202 Accepted<br/>(review_id)" --> UI
+    UI -. "6. Poll GET /review_status/:id<br/>(Every 2s)" .-> API
+    API -. "7. O(1) Cache Lookup" .-> Redis
+    RabbitMQ -- "8. Consume Task" --> Worker
+    Worker -- "9. Update review:id = PROCESSING" --> Redis
+    Worker -- "10. Query Top-K DSA Context" --> FAISS
+    FAISS -. "Relevant Concepts" .-> Worker
+    Worker -- "11. Prompt (Context + Code)" --> OpenAI
+    OpenAI -. "Review + Structured JSON Mistakes" .-> Worker
+    Worker -- "12. Persist Reviews, Mistakes & Spaced Schedule" --> Mongo
+    Worker -- "13. Set review:id = DONE & Cache Result" --> Redis
+    Worker -- "14. Send ACK" --> RabbitMQ
+    Prometheus -. "Scrapes API Metrics" .-> API
+    Prometheus -. "Scrapes Task Latency (:9100)" .-> Worker
+    Grafana -. "Queries Metrics" .-> Prometheus
+```
 ---
 
 ## ⚙️ Tech Stack (and why)
@@ -43,6 +99,7 @@ While practicing DSA:
 | OpenAI               | Code review agent                       |
 | Prometheus + Grafana | Production-grade observability          |
 | Docker Compose       | Multi-service reproducible environment  |
+
 
 ---
 
